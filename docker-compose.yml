@@ -1,26 +1,35 @@
 services:
   ai-baby-monitor:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: AI-Baby-Monitor
     restart: unless-stopped
     ports:
       - "8847:8847"
-    
+
     # Environment variables
     environment:
-      - RTSP_URL=${RTSP_URL}
+      - STREAM_URL=${STREAM_URL}
+      - STREAM_SELF_SIGNED_CERT=${STREAM_SELF_SIGNED_CERT}
       - FLASK_ENV=production
       - PYTHONUNBUFFERED=1
-    
+
     # Volume mappings
     volumes:
       # Map recordings directory (MONITOR_RECORDINGS_DIR)
       - ${HOME}/baby-monitor:/app/baby-monitor
-    # Health check override
+      # Mount source code for development/debugging
+      #- ./services:/app/services
+      #- ./templates:/app/templates
+      #- ./static:/app/static
+      #- ./api:/app/api
+      #- ./config:/app/config
+      #- ./utils:/app/utils
+      #- ./app.py:/app/app.py
+      # Health check override
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8847/health"]
+      test: [ "CMD", "curl", "-f", "http://localhost:8847/health" ]
       interval: 30s
       timeout: 10s
       retries: 3

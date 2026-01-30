@@ -13,7 +13,7 @@ from services.detection.yolo_detector import YOLODetector
 from services.tracking.deepsort_tracker import DeepSortTracker
 from services.monitoring.monitors import SleepMonitor, SafetyMonitor
 from services.visualization.visualizer import Visualizer
-from services.streaming.rtsp_reader import RTSPReader
+from services.streaming.video_reader import VideoReader
 
 
 class FrameMemoryPool:
@@ -49,6 +49,7 @@ class WebStreamManager(threading.Thread):
         self.adaptive_quality = 80
         self.adaptive_fps = 25
         self.daemon = True
+        self.emitted_frame_count = 0
         
     def add_frame(self, frame):
         """Add frame to streaming queue (called by AI thread)"""
@@ -105,34 +106,22 @@ class WebStreamManager(threading.Thread):
         else:
             self.adaptive_fps = 25
             self.adaptive_quality = 80
+            
+        print(f"[WebStreamManager] Client count updated: {count}. Mode: FPS={self.adaptive_fps}, Quality={self.adaptive_quality}")
     
     def run(self):
-        """WebSocket streaming loop"""
+        """WebStreamManager loop - Reduced to a low-frequency stats update since MJPEG is used"""
         while self.running:
-            frame_data, quality = self.get_latest_frame()
-            if frame_data is not None:
-                try:
-                    # Encode frame with adaptive quality
-                    quality_val = int(quality) if quality is not None else 80
-                    encode_params = [cv2.IMWRITE_JPEG_QUALITY, quality_val]
-                    ret, buffer = cv2.imencode('.jpg', frame_data, encode_params)
-                    
-                    if ret:
-                        # Convert to base64 for WebSocket transmission
-                        frame_b64 = base64.b64encode(buffer).decode('utf-8')
-                        
-                        # Send to only users with streaming permissions via WebSocket room
-                        self.socketio.emit('video_frame', {'frame': frame_b64}, room='streaming_enabled')
-                        
-                        # Memory cleanup
-                        del buffer, frame_b64
-                        
-                except Exception as e:
-                    print(f"WebSocket streaming error: {e}")
+            # MJPEG is now used for streaming directly via the /video_feed route.
+            # This thread no longer needs to encode and emit frames via WebSockets.
+            # We keep it alive for stats tracking if needed, but remove the heavy cv2.imencode.
             
-            # Adaptive sleep based on client load
-            sleep_time = 1.0 / self.adaptive_fps
-            time.sleep(sleep_time)
+            # self.emitted_frame_count += 1
+            # if self.emitted_frame_count % 100 == 0:
+            #     print(f"[WebStreamManager] Streaming heartbeat.")
+            
+            # Long sleep as we don't need real-time loops here anymore
+            time.sleep(1.0)
     
     def stop(self):
         self.running = False
@@ -148,7 +137,7 @@ class AIBabyMonitorStreamer(threading.Thread):
         self.tracker = DeepSortTracker()
         self.sleep_monitor = SleepMonitor()
         self.safety_monitor = SafetyMonitor()
-        self.reader = RTSPReader(config.RTSP_URL)
+        self.reader = VideoReader(config.STREAM_URL)
         
         # Initialize frame dimensions
         frame = None
@@ -240,7 +229,7 @@ class AIBabyMonitorStreamer(threading.Thread):
                 # Send to web streaming thread
                 self.web_stream_manager.add_frame(annotated)
                 
-                # Periodic garbage collection
+            # Periodic garbage collection
                 self.frame_count += 1
                 if self.frame_count % self.gc_interval == 0:
                     gc.collect()
@@ -249,7 +238,14 @@ class AIBabyMonitorStreamer(threading.Thread):
                 print(f"AI Pipeline error: {e}")
                 continue
             
-            time.sleep(1.0 / config.TARGET_FPS)
+            # Dynamic sleep based on active viewers (save CPU if no one is watching)
+            client_count = self.web_stream_manager.client_connections
+            if client_count == 0:
+                # No one watching? Slow down to 2 FPS to reduce idle CPU usage
+                time.sleep(0.5)
+            else:
+                # Someone is watching? Process at TARGET_FPS (max 10 FPS on CPU)
+                time.sleep(1.0 / config.TARGET_FPS)
 
     def stop(self):
         self.running = False
@@ -313,7 +309,7 @@ class StreamingService:
     def get_metrics(self):
         """Get system and streaming metrics"""
         # System metrics
-        cpu = psutil.cpu_percent(interval=0.1)
+        cpu = psutil.cpu_percent(interval=None)
         memory = psutil.virtual_memory().percent
         net_io = psutil.net_io_counters()
         network = min(100, (net_io.bytes_sent + net_io.bytes_recv) / 1e7)
@@ -325,8 +321,27 @@ class StreamingService:
         # Sleep metrics (only if streamer is available)
         if self.ai_streamer is not None:
             sleep_state, sleep_time = self.ai_streamer.get_sleep_metrics()
+            # Child status
+            child_id = self.ai_streamer.tracker.child_id
+            if child_id is not None:
+                child_status = {
+                    'selected': True,
+                    'child_id': child_id,
+                    'confidence': self.ai_streamer.tracker.track_confidences.get(child_id, 0)
+                }
+            else:
+                child_status = {'selected': False}
         else:
             sleep_state, sleep_time = 'Offline', '0m'
+            child_status = {'selected': False}
+        
+        # Notification count
+        from models.notification import Notification
+        try:
+            # We wrap this in try-except because it requires app context
+            notification_count = Notification.query.count()
+        except Exception:
+            notification_count = 0
         
         # Streaming metrics
         active_client_count = len(self.active_clients)
@@ -341,6 +356,8 @@ class StreamingService:
             'sleep_state': sleep_state,
             'room_temp': room_temp,
             'sleep_time': sleep_time,
+            'child_status': child_status,
+            'notification_count': notification_count,
             'streaming': {
                 'active_clients': active_client_count,
                 'adaptive_fps': streaming_fps,

@@ -10,8 +10,9 @@ load_dotenv()
 class BabyMonitorSettings:
     """Main configuration class for RTSP Recorder"""
 
-    # ==================== RTSP Settings ====================
-    RTSP_URL = os.getenv("RTSP_URL") 
+    # ==================== Video Input Settings ====================
+    STREAM_URL = os.getenv("STREAM_URL", os.getenv("RTSP_URL"))   # Can be RTSP URI or HTTP/HTTPS MJPEG stream URL 
+    STREAM_SELF_SIGNED_CERT = os.getenv("STREAM_SELF_SIGNED_CERT", "false").lower() == "true" 
     RTSP_TIMEOUT = int(os.getenv("RTSP_TIMEOUT", 10))
     YOLO_MODEL_NAME = os.getenv("MODEL_NAME", "yolov8n.pt")
     
@@ -33,7 +34,7 @@ class BabyMonitorSettings:
     # Use Docker-compatible paths if running in container
     
     CONFIDENCE_THRESHOLD = 0.4  # detection confidence
-    TARGET_FPS = 30.0  # reduced fps for CPU processing
+    TARGET_FPS = 30.0  # reduced fps for CPU processing. Higher values starve the web server.
     DEBUG_VIDEO = True  # enable extra video debugging output
     
     # GPU usage flag
