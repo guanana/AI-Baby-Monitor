@@ -156,7 +156,7 @@ class VideoReader:
                          self.cap = cv2.VideoCapture(self.url)
                 else:
                     # Assume RTSP or other ffmpeg supported stream
-                    print(f"[VIDEO] Detected RTSP/Video stream: {self.url}")
+                    print(f"[VIDEO] Fallback to RTSP/Video stream: {self.url}")
                     self.cap = cv2.VideoCapture(self.url, cv2.CAP_FFMPEG)
                     # Set additional properties for better RTSP connection
                     self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)

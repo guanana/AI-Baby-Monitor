@@ -43,6 +43,7 @@
 
 ### 🔄 **Smart Connectivity**
 - **RTSP Stream Support**: Compatible with IP cameras supporting RTSP protocol
+- **MJPEG Stream Support**: Compatible with variety of devices that stream this protocol
 - **Auto-Reconnection**: Intelligent reconnection on network interruptions
 - **Buffering Optimization**: Low-latency streaming with minimal delay
 - **Connection Status**: Visual indicators for stream health

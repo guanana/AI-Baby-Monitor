@@ -20,7 +20,7 @@ def get_metrics():
         # Return basic metrics when streaming is not available
         import psutil
         return jsonify({
-            'cpu': psutil.cpu_percent(interval=0.1),
+            'cpu': psutil.cpu_percent(interval=None),
             'memory': psutil.virtual_memory().percent,
             'network': 0,
             'detection_rate': 0,

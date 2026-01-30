@@ -12,6 +12,7 @@ from api.notification_route import notification_bp
 from api.error_handlers import errors_bp
 from api.websocket_handlers import register_socketio_events
 from api.camera_api import camera_info_bp, camera_control_bp
+from api.stream_route import stream_bp
 from services.streaming.streaming_service import initialize_streaming_service
 
 app = Flask(__name__)
@@ -51,6 +52,7 @@ app.register_blueprint(camera_control_bp)
 # Import and register active users blueprint
 from api.active_users_route import active_users_bp
 app.register_blueprint(active_users_bp)
+app.register_blueprint(stream_bp)
 
 # Initialize databases (notification manager first, then auth)
 notification_manager.init_app(app)

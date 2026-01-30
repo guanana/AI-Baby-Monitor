@@ -17,18 +17,22 @@ logger = logging.getLogger(__name__)
 def get_camera_info():
     """Get camera basic information, connection status, and presets."""
     try:
-        # Get camera status
+        # Get camera status (now handles background init and caching)
         status = camera_service.get_status()
         
-        # Get camera presets
+        # Get camera presets (now handles background init and caching)
         presets = camera_service.get_presets()
         
+        # We return success: True if we at least got a valid JSON response from the service
+        # even if the camera itself is offline or initializing.
         return jsonify({
-            'success': status['available'],
+            'success': True, 
+            'is_available': status['available'],
             'device_model': status['device_model'],
             'privacy_mode': status['privacy_mode'],
             'connection_status': status['connection_status'],
             'presets': presets,
+            'reason': status.get('reason'),
             'error': status.get('error') if not status['available'] else None
         })
     except Exception as e:
